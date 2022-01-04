@@ -71,7 +71,7 @@ LM2596 3A Step-Down Voltage Regulator is used for powering the system components
 integrated circuits that provide all the active functions for a step-down (buck) switching regulator, capable of driving a 3-A load with excellent line and load
 regulation \cite{Three}. This voltage regulator supplies enough output current for powering the 5V components in the system.
 
-\subsubsection{HC05 Bluetooth Module}
+\subsubsection{HC05 Bluetooth Module} \label{sec_hc05_module}
 The Bluetooth\texttrademark\;wireless technology is designed as a short-range networking solution for personal, portable electronic devices and embedded systems. It overcomes the limitations of line of sight and one to one communication of its possible competitor Infra-Red(IR). It operates in the 2.4 GHz Industrial, Scientific and Medical (ISM) band at a maximum data rate of 720 Kbps \cite{Bluetooth_Overview}. \\
 
 In RC Car Battle system, Bluetooth\texttrademark\;is used for communication between the RC car unit and the remote controller Android\texttrademark\;phone. HC05 Bluetooth\texttrademark\;module used for adding Bluetooth\texttrademark\;interface to the STM32 MCU of the system. HC05 module is Bluetooth SPP (Serial Port Protocol) module, designed for transparent wireless serial connection setup. It has integrated antenna and programmable UART interface. Baud rate, password, name of the can be configured over this UART interface in configuration mode \cite{HC05_datasheet}. This module allows MCU to communicate with Bluetooth\texttrademark\;over the UART interface. 115200 baud rate used for UART communication with the HC05 module. This module is shown in Figure \ref{fig:hc05_module}. \\ 
@@ -89,8 +89,27 @@ IR transmitter and receiver module has been modified for this project. A RC car 
 
 % Hardware Components Part End
 
+\subsection{RC Car Control Unit}
+In this project, custom RC car control unit has been designed on PCB. The designed and developed multi-layered PCB gathers system components under a single circuit. The PCB contains female and male headers for system components. The motivation behind the design and produce PCB is avoid short circuit and loose electrical connections. The RC car control unit provides robust connection between system components and electronic modules. The designed PCB contains the following system component connections :
+\begin{enumerate}
+    \item Servo and DC motor male header pins.
+    \item HC05 Bluetooth\texttrademark\;female header pins.
+    \item STM32 MCU female header pins.
+    \item Voltage regulator pad connections.
+    \item L298N motor driver pad connections.
+    \item Voltage divider circuit, resistor connections.
+    \item Input power male header pins.
+    \item Jumper for selecting the Li-Po battery ADC input with male headers.
+    \item UART male header pins for debugging.
+\end{enumerate}
 
-\subsection{RC Control Unit}
+
+\begin{figure}[!htbp]
+    \centering
+    \includegraphics[width=0.75\textwidth]{Imgs/pcb.png}
+    \caption{\label{fig:custom_pcb}Design View of RC Car Control Unit PCB}
+\end{figure}
+
 asd
 The Algorithm \ref{labelOfAlgorithm} shows the pseudo code of...
 \begin{algorithm}
@@ -117,6 +136,28 @@ The Algorithm \ref{labelOfAlgorithm} shows the pseudo code of...
 \section{Firmware} \label{sec_firmware_design}
 
 \subsection{Bidirectional Reliable Bluetooth Communication} \label{sec_bluetooth_comm}
+
+Communication with the controller smartphone and the RC car unit provided via Bluetooth\texttrademark.\;Hardware details of the Bluetooth\texttrademark\;explained in the Section \ref{sec_hc05_module}. This section explains the implementation details of the bidirectional Bluetooth\texttrademark\; communication.
+
+\subsubsection{Receiving RC Command From Smartphone} \label{sec_receive_rc_command}
+
+The remote controller smartphone sends RC command to the target RC car unit at 10 HZ. HC05 module receives the incoming data from the controller smartphone, and sends these incoming data to the UART peripheral of MCU of the RC car unit. This communication runs at 115200 baud-rate. \\
+
+The UART unit of the STM32 MCU generates IRQ when new data available on the UART line. Custom ISR has been implemented for catching and handling the interrupts. The UART interrupts used for efficient communication instead of polling method in order to avoid consuming unnecessary cycles. UART line is authorized in the NVIC unit of the MCU for an interrupt to occur from the UART unit of the MCU. \\
+
+To able the enabling the read interrupts from the UART unit, RXNEIE (RX not empty interrupt enabled) bit of the CR1 (Control Register 1) has been set to 1. After this configuration, when there is a data to be read on the UART line, an interrupt will be generated from the UART unit. This control register is shown in Figure \ref{fig:uart_cr_register}. RXNEIE bit of the register highlighted in yellow.
+
+\begin{figure}[!htbp]
+    \centering
+    \includegraphics[width=1\textwidth]{Imgs/cr_register.png}
+    \caption{\label{fig:uart_cr_register}UART Control Register 1 of the MCU (REFERANS VERILMELI USAR MANUAL)}
+\end{figure}
+
+
+
+\subsubsection{Transmitting RC Car Information to the Smartphone}
+\label{sec_transmit_rc_info}
+
 
 \subsection{Controlling Motors} \label{sec_controlling_motors}
 
