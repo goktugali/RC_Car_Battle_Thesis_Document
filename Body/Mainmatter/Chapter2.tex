@@ -110,28 +110,8 @@ In this project, custom RC car control unit has been designed on PCB. The design
     \caption{\label{fig:custom_pcb}Design View of RC Car Control Unit PCB}
 \end{figure}
 
-asd
-The Algorithm \ref{labelOfAlgorithm} shows the pseudo code of...
-\begin{algorithm}
-\caption{Caption of the algorithm}
-\label{labelOfAlgorithm}
-\begin{algorithmic}
-\Require $n \geq 0$ % i.e. input
-\Ensure $y = x^n$  % i.e. output
-\State $y \gets 1$
-\State $X \gets x$
-\State $N \gets n$
-\While{$N \neq 0$}
-\If{$N$ is even}
-    \State $X \gets X \times X$
-    \State $N \gets \frac{N}{2}$  \Comment{This is a comment}
-\ElsIf{$N$ is odd}
-    \State $y \gets y \times X$
-    \State $N \gets N - 1$
-\EndIf
-\EndWhile
-\end{algorithmic}
-\end{algorithm}
+Manufactured, real version of the control unit PCB is shown in Figure .
+
 
 \section{Firmware} \label{sec_firmware_design}
 
@@ -139,24 +119,80 @@ The Algorithm \ref{labelOfAlgorithm} shows the pseudo code of...
 
 Communication with the controller smartphone and the RC car unit provided via Bluetooth\texttrademark.\;Hardware details of the Bluetooth\texttrademark\;explained in the Section \ref{sec_hc05_module}. This section explains the implementation details of the bidirectional Bluetooth\texttrademark\; communication.
 
-\subsubsection{Receiving RC Command From Smartphone} \label{sec_receive_rc_command}
+\subsubsection{UART RX Registers} \label{sec_receive_rc_command}
 
 The remote controller smartphone sends RC command to the target RC car unit at 10 HZ. HC05 module receives the incoming data from the controller smartphone, and sends these incoming data to the UART peripheral of MCU of the RC car unit. This communication runs at 115200 baud-rate. \\
 
 The UART unit of the STM32 MCU generates IRQ when new data available on the UART line. Custom ISR has been implemented for catching and handling the interrupts. The UART interrupts used for efficient communication instead of polling method in order to avoid consuming unnecessary cycles. UART line is authorized in the NVIC unit of the MCU for an interrupt to occur from the UART unit of the MCU. \\
 
-To able the enabling the read interrupts from the UART unit, RXNEIE (RX not empty interrupt enabled) bit of the CR1 (Control Register 1) has been set to 1. After this configuration, when there is a data to be read on the UART line, an interrupt will be generated from the UART unit. This control register is shown in Figure \ref{fig:uart_cr_register}. RXNEIE bit of the register highlighted in yellow.
+To able to enable the read interrupts from the UART unit, RXNEIE (RX not empty interrupt enabled) bit of the CR1 (Control Register 1) has been set to 1. After this configuration, when there is a new data to be read on the UART line, an interrupt will be generated from the UART unit. This control register is shown in Figure \ref{fig:uart_cr_register}. RXNEIE bit of the register highlighted in yellow.
 
 \begin{figure}[!htbp]
     \centering
     \includegraphics[width=1\textwidth]{Imgs/cr_register.png}
-    \caption{\label{fig:uart_cr_register}UART Control Register 1 of the MCU (REFERANS VERILMELI USAR MANUAL)}
+    \caption{\label{fig:uart_cr_register}UART Control Register 1 of the MCU (1) \cite{Ref_stm32_um}}
+\end{figure}
+
+When there is new data on the UART line, RXNE (RX not empty) bit of the status register (SR) of the UART unit being set to 1 by hardware. This bit is cleared by a read to the DR register of UART which contains the incoming data (byte). This status register is shown in Figure \ref{fig:uart_sr_register}. RXNE bit of the register highlighted in yellow.
+
+\begin{figure}[!htbp]
+    \centering
+    \includegraphics[width=1\textwidth]{Imgs/sr_register.png}
+    \caption{\label{fig:uart_sr_register}UART Status Register of the MCU (1) \cite{Ref_stm32_um}}
 \end{figure}
 
 
-
-\subsubsection{Transmitting RC Car Information to the Smartphone}
+\subsubsection{UART TX Registers}
 \label{sec_transmit_rc_info}
+
+The RC car unit sends RC car information packet to the controller smartphone at 1 HZ. The MCU sends the data over the UART line, which is connected to the HC05 module. The information packet contains the version of the firmware, Li-Po battery percentage and hit counter. The controller smartphone receives these information packets in order to view in the user interface and send the related information to the database (game server).
+
+The UART unit of the STM32 MCU generates IRQ when TX sending buffer is empty for sending new data. Custom ISR has been implemented for catching and handling the interrupts. When the IRQ is triggered, the data register of the UART unit is filling by the byte which is next in the ISR.
+
+To able to enable the write available interrupts for UART unit, TXEIE (TX empty interrupt enabled) bit of the CR1 (Control Register 1) has been set to 1. After this configuration, when TX buffer of the UART unit is empty, an IRQ will be generated from the UART unit. The control register is shown in Figure \ref{fig:uart_cr_tx_register}. TXEIE bit of the register highlighted in yellow.
+
+\begin{figure}[!htbp]
+    \centering
+    \includegraphics[width=1\textwidth]{Imgs/cr_tx_register.png}
+    \caption{\label{fig:uart_cr_tx_register}UART Control Register 1 of the MCU (2) \cite{Ref_stm32_um}}
+\end{figure}
+
+When TX buffer of the UART unit is empty, TXE bit of the status register (SR) of the UART unit being set to 1 by hardware. This bit is cleared by write to the DR register of the UART unit, which contains the data (byte) to be sent to the TX buffer of the UART unit. This status register is shown in Figure \ref{fig:uart_sr_tx_register}. TXE bit of the register highlighted in yellow.
+
+\begin{figure}[!htbp]
+    \centering
+    \includegraphics[width=1\textwidth]{Imgs/sr_tx_register.png}
+    \caption{\label{fig:uart_sr_tx_register}UART Status Register of the MCU (2) \cite{Ref_stm32_um}}
+\end{figure}
+
+
+\subsubsection{UART Circular Buffer Implementation}
+\label{sec_uart_circular_buff}
+
+A circular buffer is a FIFO data structure that considers memory to be managed circularly; that is, the read/write indices loop back to 0 after it reaches the buffer length. Circular buffer has a fixed size allocated once at the system run-time. Tail and head pointers used to indicate where to read or write to the buffer mechanism. Each time a new data sample is added (write) into the buffer, the head pointer is incremented and when the data is being read the tail pointer is incremented \cite{Ref_circ-buffer} \cite{Ref_circ_buffer_paper}. In this mechanism, producer consumer paradigm can be easily utilized over the buffer.
+
+The Algorithm \ref{isr_rx_algorithm} shows the pseudo code of the ISR of the UART unit.
+
+\begin{algorithm}
+\caption{ISR of UART unit}
+\label{isr_rx_algorithm}
+    \begin{algorithmic}
+    \If{RXNE bit of the SR is 1 \textbf{AND} RXNEIE bit of the CR1 is 1}
+        \State read byte from UART->DR, push into circular buffer.
+        \State increment head position of the circular buffer.
+    \EndIf
+    \If{TXE bit of the SR is 1 \textbf{AND} TXEIE bit of the CR1 is 1}
+        \If{tail position is head position}
+            \State set TXEIE 0 for disabling TXE interrupts.
+        \ElsIf{tail position is not head position}
+            \State read byte from the circular buffer, push into USART->DR.
+            \State increment tail position of the circular buffer.
+        \EndIf
+    \EndIf
+    \end{algorithmic}
+\end{algorithm}
+
+
 
 
 \subsection{Controlling Motors} \label{sec_controlling_motors}
@@ -179,6 +215,26 @@ To able the enabling the read interrupts from the UART unit, RXNEIE (RX not empt
 
 \begin{comment}
 % Below are comments, just for source..
+\begin{algorithm}
+\caption{ISR of UART line for RX interrupts}
+\label{isr_rx_algorithm}
+\begin{algorithmic}
+\Require $n \geq 0$ % i.e. input
+\Ensure $y = x^n$  % i.e. output
+\State $y \gets 1$
+\State $X \gets x$
+\State $N \gets n$
+\While{$N \neq 0$}
+\If{$N$ is even}
+    \State $X \gets X \times X$
+    \State $N \gets \frac{N}{2}$  \Comment{This is a comment}
+\ElsIf{$N$ is odd}
+    \State $y \gets y \times X$
+    \State $N \gets N - 1$
+\EndIf
+\EndWhile
+\end{algorithmic}
+\end{algorithm}
     Ut enim ad minima veniam, quis nostrum exercitationem ullam corporis suscipit laboriosam, nisi ut aliquid ex ea commodi consequatur? Quis autem vel eum iure reprehenderit qui in ea voluptate velit esse quam nihil molestiae consequatur, vel illum qui dolorem eum fugiat quo voluptas nulla pariatur? \ref{tab:widgetss}
 
     \begin{table}[!htbp]
